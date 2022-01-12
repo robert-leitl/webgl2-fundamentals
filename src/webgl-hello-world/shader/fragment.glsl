@@ -4,8 +4,14 @@
 // to pick one. highp is a good default. It means "high precision"
 precision highp float;
 
+uniform vec4 u_color;
+uniform float u_time;
+
 out vec4 outColor;
 
 void main() {
-    outColor = vec4(1., 0., 0., 1.);
+    float f = (sin(u_time * 12.) * 0.5 + 1.) * 0.5;
+    vec4 color = vec4(u_color.rgb * f, 1.);
+
+    outColor = color;
 }

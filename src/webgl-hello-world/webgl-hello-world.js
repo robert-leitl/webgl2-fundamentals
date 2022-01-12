@@ -5,6 +5,7 @@ import vertexShaderSource from './shader/vertex.glsl';
 export class WebGLHelloWorld {
     oninit;
 
+    #time = 0;
     #isDestroyed = false;
 
     constructor(canvas, pane, oninit = null) {
@@ -24,6 +25,12 @@ export class WebGLHelloWorld {
         if (this.#isDestroyed) return;
 
         this.#render();
+
+        // update uniforms
+        this.gl.uniform4f(this.colorUniformLocation, 1, 0, 0, 1);
+        this.gl.uniform1f(this.timeUniformLocation, this.#time);
+
+        this.#time += 0.01;
 
         requestAnimationFrame(() => this.run());
     }
@@ -58,6 +65,10 @@ export class WebGLHelloWorld {
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer);
         const positions = [0, 0, 0.5, 0, 0, 0.5];
         this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array(positions), this.gl.STATIC_DRAW);
+
+        // Uniforms
+        this.colorUniformLocation = this.gl.getUniformLocation(this.program, 'u_color');
+        this.timeUniformLocation = this.gl.getUniformLocation(this.program, 'u_time');
 
         // VAO
         this.vao = this.gl.createVertexArray();
