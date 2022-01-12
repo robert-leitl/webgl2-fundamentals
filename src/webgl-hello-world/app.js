@@ -1,4 +1,4 @@
-import { Sketch } from './sketch';
+import { WebGLHelloWorld } from './webgl-hello-world';
 import { Pane } from 'tweakpane';
 
 let DEBUG = false;
@@ -12,17 +12,16 @@ let sketch;
 let resizeTimeoutId;
 
 window.addEventListener('load', () => {
-    const container = document.body;
+    const canvas = document.body.querySelector('#c');
 
     let pane;
     if (DEBUG) {
         pane = new Pane({ title: 'Settings' });
     }
 
-    sketch = new Sketch(container, pane);
-    sketch.oninit = () => {
+    sketch = new WebGLHelloWorld(canvas, pane, (sketch) => {
         sketch.run(); 
-    }
+    });
 });
 
 window.addEventListener('resize', () => {
