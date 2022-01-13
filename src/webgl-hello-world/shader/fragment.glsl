@@ -9,9 +9,12 @@ uniform float u_time;
 
 out vec4 outColor;
 
+in vec4 v_color;
+
 void main() {
-    float f = (sin(u_time * 12.) * 0.5 + 1.) * 0.5;
-    vec4 color = vec4(u_color.rgb * f, 1.);
+    float s = 0.5;
+    float f = (sin(u_time * 5.) * 0.5 + 1.) * s + (1. - s);
+    vec4 color = vec4(v_color.rgb * f, 1.);
 
     outColor = color;
 }

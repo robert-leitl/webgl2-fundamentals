@@ -40,7 +40,7 @@ export class WebGLHelloWorld {
         this.gl.clearColor(0, 0, 0, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
         this.gl.useProgram(this.program);
-        this.gl.bindVertexArray(this.vao);
+        this.gl.bindVertexArray(this.vertexArrayObject);
         this.gl.drawArrays(this.gl.TRIANGLES, 0, 3);
     }
 
@@ -58,24 +58,37 @@ export class WebGLHelloWorld {
         this.fragmentShader = this.#createShader(this.gl, this.gl.FRAGMENT_SHADER, fragmentShaderSource);
         this.program = this.#createProgram(this.gl, this.vertexShader, this.fragmentShader);
 
-        // Buffer
+        // set of attributes
+        this.vertexArrayObject = this.gl.createVertexArray();
+        this.gl.bindVertexArray(this.vertexArrayObject);
+
+        // Postion Buffer
         // find the position attribute within the compiled and linked program
         const positionAttributeLocation = this.gl.getAttribLocation(this.program, 'a_position');
         const positionBuffer = this.gl.createBuffer();
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer);
         const positions = [0, 0, 0.5, 0, 0, 0.5];
         this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array(positions), this.gl.STATIC_DRAW);
+        this.gl.enableVertexAttribArray(positionAttributeLocation);
+        // this also binds the positionBuffer to the attribute --> ARRAY_BUFFER is free
+        this.gl.vertexAttribPointer(positionAttributeLocation, 2, this.gl.FLOAT, false, 0, 0);
+
+        // Vertex Color Buffer
+        const vertexColorAttribLocation = this.gl.getAttribLocation(this.program, 'a_vertexColor');
+        const vertexColorBuffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, vertexColorBuffer);
+        const vertexColors = [
+            Math.random() * 255, Math.random() * 255, Math.random() * 255,
+            Math.random() * 255, Math.random() * 255, Math.random() * 255,
+            Math.random() * 255, Math.random() * 255, Math.random() * 255
+        ];
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array(vertexColors), this.gl.STATIC_DRAW);
+        this.gl.enableVertexAttribArray(vertexColorAttribLocation);
+        this.gl.vertexAttribPointer(vertexColorAttribLocation, 3, this.gl.UNSIGNED_BYTE, true, 0, 0);
 
         // Uniforms
         this.colorUniformLocation = this.gl.getUniformLocation(this.program, 'u_color');
         this.timeUniformLocation = this.gl.getUniformLocation(this.program, 'u_time');
-
-        // VAO
-        this.vao = this.gl.createVertexArray();
-        this.gl.bindVertexArray(this.vao);
-        this.gl.enableVertexAttribArray(positionAttributeLocation);
-        // this also binds the positionBuffer to the attribute --> ARRAY_BUFFER is free
-        this.gl.vertexAttribPointer(positionAttributeLocation, 2, this.gl.FLOAT, false, 0, 0);
 
         this.resize();
 
