@@ -2,7 +2,7 @@
 import fragmentShaderSource from './shader/fragment.glsl';
 import vertexShaderSource from './shader/vertex.glsl';
 
-export class WebGLHelloWorld {
+export class WebglImageProcessing {
     oninit;
 
     #time = 0;
@@ -13,7 +13,11 @@ export class WebGLHelloWorld {
         this.pane = pane;
         this.oninit = oninit;
 
-        this.#init();
+        this.image = new Image();
+        this.image.src = new URL('../assets/image.jpeg', import.meta.url);
+        this.image.onload = () => {
+            this.#init();
+        }
     }
 
     resize() {
@@ -29,6 +33,7 @@ export class WebGLHelloWorld {
         // update uniforms
         this.gl.uniform4f(this.colorUniformLocation, 1, 0, 0, 1);
         this.gl.uniform1f(this.timeUniformLocation, this.#time);
+        this.gl.uniform1i(this.imageUniformLocation, this.textureUnitIndex);
 
         this.#time += 0.01;
 
@@ -58,37 +63,64 @@ export class WebGLHelloWorld {
         this.fragmentShader = this.#createShader(this.gl, this.gl.FRAGMENT_SHADER, fragmentShaderSource);
         this.program = this.#createProgram(this.gl, this.vertexShader, this.fragmentShader);
 
+        // Attribute Locations
+        const positionAttributeLocation = this.gl.getAttribLocation(this.program, 'a_position');
+        const uvAttribLocation = this.gl.getAttribLocation(this.program, 'a_uv');
+
+        // Uniforms
+        this.colorUniformLocation = this.gl.getUniformLocation(this.program, 'u_color');
+        this.timeUniformLocation = this.gl.getUniformLocation(this.program, 'u_time');
+        this.imageUniformLocation = this.gl.getUniformLocation(this.program, 'u_image');
+
         // set of attributes
         this.vertexArrayObject = this.gl.createVertexArray();
         this.gl.bindVertexArray(this.vertexArrayObject);
 
         // Postion Buffer
-        // find the position attribute within the compiled and linked program
-        const positionAttributeLocation = this.gl.getAttribLocation(this.program, 'a_position');
         const positionBuffer = this.gl.createBuffer();
         this.gl.bindBuffer(this.gl.ARRAY_BUFFER, positionBuffer);
-        const positions = [0, 0, 0.5, 0, 0, 0.5];
+        const positions = [
+            -1, 3,
+            -1, -1,
+            3, -1
+        ];
         this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array(positions), this.gl.STATIC_DRAW);
         this.gl.enableVertexAttribArray(positionAttributeLocation);
         // this also binds the positionBuffer to the attribute --> ARRAY_BUFFER is free
         this.gl.vertexAttribPointer(positionAttributeLocation, 2, this.gl.FLOAT, false, 0, 0);
 
-        // Vertex Color Buffer
-        const vertexColorAttribLocation = this.gl.getAttribLocation(this.program, 'a_vertexColor');
-        const vertexColorBuffer = this.gl.createBuffer();
-        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, vertexColorBuffer);
-        const vertexColors = [
-            Math.random() * 255, Math.random() * 255, Math.random() * 255,
-            Math.random() * 255, Math.random() * 255, Math.random() * 255,
-            Math.random() * 255, Math.random() * 255, Math.random() * 255
+        // UV Buffer
+        const uvBuffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, uvBuffer);
+        const uvs = [
+            0, 2,
+            0, 0,
+            2, 0
         ];
-        this.gl.bufferData(this.gl.ARRAY_BUFFER, new Uint8Array(vertexColors), this.gl.STATIC_DRAW);
-        this.gl.enableVertexAttribArray(vertexColorAttribLocation);
-        this.gl.vertexAttribPointer(vertexColorAttribLocation, 3, this.gl.UNSIGNED_BYTE, true, 0, 0);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array(uvs), this.gl.STATIC_DRAW);
+        this.gl.enableVertexAttribArray(uvAttribLocation);
+        this.gl.vertexAttribPointer(uvAttribLocation, 2, this.gl.FLOAT, false, 0, 0);
 
-        // Uniforms
-        this.colorUniformLocation = this.gl.getUniformLocation(this.program, 'u_color');
-        this.timeUniformLocation = this.gl.getUniformLocation(this.program, 'u_time');
+        // Texture
+        const imageTexture = this.gl.createTexture();
+        // all texture commands will affect texture unit 0
+        this.textureUnitIndex = 0;
+        this.gl.activeTexture(this.gl.TEXTURE0 + this.textureUnitIndex);
+        this.gl.bindTexture(this.gl.TEXTURE_2D, imageTexture);
+        // set texture params
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.REPEAT);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.REPEAT);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
+        // upload texture
+        this.gl.texImage2D(
+            this.gl.TEXTURE_2D,
+            0, // mip level,
+            this.gl.RGBA,
+            this.gl.RGBA,
+            this.gl.UNSIGNED_BYTE,
+            this.image
+        );
 
         this.resize();
 
