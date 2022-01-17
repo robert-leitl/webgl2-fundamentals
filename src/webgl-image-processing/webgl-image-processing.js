@@ -5,6 +5,34 @@ import vertexShaderSource from './shader/vertex.glsl';
 export class WebglImageProcessing {
     oninit;
 
+    kernels = {
+        normal: [
+            0, 0, 0,
+            0, 1, 0,
+            0, 0, 0
+        ],
+        blur: [
+            0.045, 0.122, 0.045,
+            0.122, 0.332, 0.122,
+            0.045, 0.122, 0.045
+        ],
+        unsharpen: [
+            -1, -1, -1,
+            -1,  9, -1,
+            -1, -1, -1
+        ],
+        emboss: [
+            -2, -1,  0,
+            -1,  1,  1,
+            0,  1,  2
+        ]
+    };
+    effectsToApply = {
+        blur: false,
+        emboss: false,
+        unsharpen: false
+    };
+
     #time = 0;
     #isDestroyed = false;
 
@@ -33,7 +61,6 @@ export class WebglImageProcessing {
         // update uniforms
         this.gl.uniform4f(this.colorUniformLocation, 1, 0, 0, 1);
         this.gl.uniform1f(this.timeUniformLocation, this.#time);
-        this.gl.uniform1i(this.imageUniformLocation, this.textureUnitIndex);
 
         this.#time += 0.01;
 
@@ -44,9 +71,8 @@ export class WebglImageProcessing {
         // Draw
         this.gl.clearColor(0, 0, 0, 1);
         this.gl.clear(this.gl.COLOR_BUFFER_BIT);
-        this.gl.useProgram(this.program);
-        this.gl.bindVertexArray(this.vertexArrayObject);
-        this.gl.drawArrays(this.gl.TRIANGLES, 0, 3);
+
+        this.#drawEffects(this.gl);
     }
 
     destroy() {
@@ -71,6 +97,8 @@ export class WebglImageProcessing {
         this.colorUniformLocation = this.gl.getUniformLocation(this.program, 'u_color');
         this.timeUniformLocation = this.gl.getUniformLocation(this.program, 'u_time');
         this.imageUniformLocation = this.gl.getUniformLocation(this.program, 'u_image');
+        this.kernelUniformLocation = this.gl.getUniformLocation(this.program, 'u_kernel');
+        this.kernelWeightUniformLocation = this.gl.getUniformLocation(this.program, 'u_kernelWeight');
 
         // set of attributes
         this.vertexArrayObject = this.gl.createVertexArray();
@@ -101,32 +129,84 @@ export class WebglImageProcessing {
         this.gl.enableVertexAttribArray(uvAttribLocation);
         this.gl.vertexAttribPointer(uvAttribLocation, 2, this.gl.FLOAT, false, 0, 0);
 
-        // Texture
-        const imageTexture = this.gl.createTexture();
-        // all texture commands will affect texture unit 0
-        this.textureUnitIndex = 0;
-        this.gl.activeTexture(this.gl.TEXTURE0 + this.textureUnitIndex);
-        this.gl.bindTexture(this.gl.TEXTURE_2D, imageTexture);
-        // set texture params
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.REPEAT);
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.REPEAT);
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
-        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
-        // upload texture
-        this.gl.texImage2D(
-            this.gl.TEXTURE_2D,
-            0, // mip level,
-            this.gl.RGBA,
-            this.gl.RGBA,
-            this.gl.UNSIGNED_BYTE,
-            this.image
-        );
+        // Create the image texture and upload it to the gpu
+        this.imageTexture = this.#createAndSetupTexture(this.gl);
+        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image);
+
+        // Init framebuffers
+        this.framebuffers = [];
+        this.framebufferTextures = [];
+        for(let i=0; i<2; ++i) {
+            const texture = this.#createAndSetupTexture(this.gl);
+            this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.image.width, this.image.height, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, null);
+            this.framebufferTextures.push(texture);
+            const framebuffer = this.gl.createFramebuffer();
+            this.gl.bindFramebuffer(this.gl.FRAMEBUFFER, framebuffer);
+            const fboAttachementPoint = this.gl.COLOR_ATTACHMENT0;
+            this.gl.framebufferTexture2D(this.gl.FRAMEBUFFER, fboAttachementPoint, this.gl.TEXTURE_2D, texture, 0);
+            this.framebuffers.push(framebuffer);
+        }
 
         this.resize();
 
         this.#initTweakpane();
 
         if (this.oninit) this.oninit(this);
+    }
+
+    #drawEffects(gl) {
+        gl.useProgram(this.program);
+        gl.bindVertexArray(this.vertexArrayObject);
+
+        // use image texture
+        gl.activeTexture(gl.TEXTURE0 + 0);
+        gl.bindTexture(gl.TEXTURE_2D, this.imageTexture);
+
+        // tell the shader to use texture at unit 0
+        gl.uniform1i(this.imageUniformLocation, 0);
+
+        let count = 0;
+        for(let key in this.effectsToApply) {
+            if (!this.effectsToApply[key]) continue;
+
+            // set the framebuffer to render to
+            const fbo = this.framebuffers[count % 2];
+            this.#setFramebuffer(this.gl, fbo, this.image.width, this.image.height);
+
+            // render with this kernel
+            const kernel = this.kernels[key];
+            this.#drawWithKernel(this.gl, kernel);
+
+            // set the input texture to the currently used framebuffer texture (for the next draw call)
+            gl.bindTexture(gl.TEXTURE_2D, this.framebufferTextures[count % 2]);
+
+            count++;
+        }
+
+        // the final draw to screen
+        this.#setFramebuffer(this.gl, null, gl.canvas.width, gl.canvas.height);
+        this.#drawWithKernel(this.gl, this.kernels['normal']);
+    }
+
+    #setFramebuffer(gl, fbo, width, height) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); // all draw commands will affect the framebuffer
+        gl.viewport(0, 0, width, height);
+    }
+
+    #drawWithKernel(gl, kernel) {
+        gl.uniform1fv(this.kernelUniformLocation, kernel);
+        gl.uniform1f(this.kernelWeightUniformLocation, this.#computeKernelWeight(kernel));
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+
+    #createAndSetupTexture(gl) {
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        return texture;
     }
 
     #createShader(gl, type, source) {
@@ -176,9 +256,17 @@ export class WebglImageProcessing {
         return needResize;
     }
 
+    #computeKernelWeight(kernel) {
+        const weight = kernel.reduce((w, c) => w + c, 0);
+        return Math.max(0, weight);
+    }
+
     #initTweakpane() {
         if (this.pane) {
             // init tweakpane folders and inputs
+            for(let key in this.effectsToApply) {
+                this.pane.addInput(this.effectsToApply, key);
+            }
         }
     }
 }

@@ -1,5 +1,5 @@
 import { Pane } from 'tweakpane';
-import { WebglImageProcessing } from './webgl-hello-world';
+import { WebglImageProcessing } from './webgl-image-processing';
 
 let DEBUG = false;
 
