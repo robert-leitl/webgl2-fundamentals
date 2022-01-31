@@ -16,6 +16,12 @@ export class WebGLTWGL {
         this.pane = pane;
         this.oninit = oninit;
 
+        this.image = new Image();
+        this.image.src = new URL('../assets/f-texture.png', import.meta.url);
+        this.image.onload = () => {
+            this.#updateTexture();
+        }
+
         this.#init();
     }
 
@@ -26,9 +32,6 @@ export class WebGLTWGL {
         
         // set the projection matrix
         this.#updateProjectionMatrix();
-
-        // set the view projection matrix
-        this.viewProjectionMatrix = m4.multiply(this.projectionMatrix, this.viewMatrix);
     }
 
     run() {
@@ -49,13 +52,8 @@ export class WebGLTWGL {
 
         this.#render();
 
-        // update uniforms
-        this.gl.uniform1f(this.timeUniformLocation, this.#time);
-
-        this.#time += 0.01;
-
         // animation models
-        this.rotation[1] += (delta / 5000) * Math.PI * 2;
+        this.rotation[1] += (delta / 30000) * Math.PI * 2;
         this.#updateModelMatrix();
 
         requestAnimationFrame(t => this.#animate(t));
@@ -77,7 +75,6 @@ export class WebGLTWGL {
 
         // Set the matrix uniform
         this.uniformsThatAreComputedForEachObject.u_world = this.planeModelMatrix;
-        this.uniformsThatAreComputedForEachObject.u_worldViewProjection = m4.multiply(this.viewProjectionMatrix, this.planeModelMatrix);
         m4.transpose(m4.inverse(this.planeModelMatrix), this.uniformsThatAreComputedForEachObject.u_worldInverseTranspose);
         twgl.setUniforms(this.uniformSetters, this.uniformsThatAreComputedForEachObject);
 
@@ -93,7 +90,6 @@ export class WebGLTWGL {
 
         // Set the matrix uniform
         this.uniformsThatAreComputedForEachObject.u_world = this.modelMatrix;
-        this.uniformsThatAreComputedForEachObject.u_worldViewProjection = m4.multiply(this.viewProjectionMatrix, this.modelMatrix);
         m4.transpose(m4.inverse(this.modelMatrix), this.uniformsThatAreComputedForEachObject.u_worldInverseTranspose);
         twgl.setUniforms(this.uniformSetters, this.uniformsThatAreComputedForEachObject);
 
@@ -132,7 +128,11 @@ export class WebGLTWGL {
             throw new Error('No WebGL 2 context!')
         }
 
-        // setup GLSL program
+        // Tell the twgl to match position with a_position,
+        // normal with a_normal etc..
+        twgl.setAttributePrefix("a_");
+
+        // setup GLSL program (compiles shader, links program, look up locations)
         this.program = twgl.createProgramFromSources(gl, [vertexShaderSource, fragmentShaderSource]);
         this.uniformSetters = twgl.createUniformSetters(gl, this.program);
         const attribSetters  = twgl.createAttributeSetters(gl, this.program);
@@ -156,6 +156,11 @@ export class WebGLTWGL {
         };
         this.planeVertexArrayObject = twgl.createVAOAndSetAttributes(gl, attribSetters, planeAttribs, this.planeBuffers.indices);
 
+        // Init the image texture
+        this.imageTexture = this.#createAndSetupTexture(this.gl);
+        // Fill the texture with a 1x1 white pixel.
+        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, 1, 1, 0, this.gl.RGBA, this.gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]));
+
         // Create a texture.
         const texture = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -163,14 +168,20 @@ export class WebGLTWGL {
         // fill texture with 3x2 pixels
         const level = 0;
         const internalFormat = gl.LUMINANCE;
-        const width = 2;
-        const height = 2;
+        const width = 8;
+        const height = 8;
         const border = 0;
         const format = gl.LUMINANCE;
         const type = gl.UNSIGNED_BYTE;
         const data = new Uint8Array([
-            255, 128,
-            128, 255,
+            255, 128, 255, 128, 255, 128, 255, 128, 
+            128, 255, 128, 255, 128, 255, 128, 255,
+            255, 128, 255, 128, 255, 128, 255, 128, 
+            128, 255, 128, 255, 128, 255, 128, 255,
+            255, 128, 255, 128, 255, 128, 255, 128, 
+            128, 255, 128, 255, 128, 255, 128, 255,
+            255, 128, 255, 128, 255, 128, 255, 128, 
+            128, 255, 128, 255, 128, 255, 128, 255,
         ]);
         gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
         gl.texImage2D(gl.TEXTURE_2D, level, internalFormat, width, height, border, format, type, data);
@@ -182,19 +193,23 @@ export class WebGLTWGL {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
         this.material1Uniforms = {
-            u_colorMult:             chroma.hsv(0, 1, 1).gl(),
+            u_colorMult:             chroma.hsv(0, 0, 1).gl(),
+            u_ambient:               [0.2, 0.2, 0.2, 1],
             u_diffuse:               texture,
             u_specular:              [1, 1, 1, 1],
             u_shininess:             50,
             u_specularFactor:        .7,
+            u_projectedTexture:      this.imageTexture
         };
 
         this.material2Uniforms = {
             u_colorMult:             chroma.hsv(200, 1, 1).gl(),
+            u_ambient:               [0.1, 0.1, 0.1, 1],
             u_diffuse:               texture,
             u_specular:              [1, 1, 1, 1],
             u_shininess:             5,
             u_specularFactor:        .25,
+            u_projectedTexture:      this.imageTexture
         };
 
         // init the transformation properties
@@ -213,14 +228,31 @@ export class WebGLTWGL {
         this.cameraRotationY = 0;
         this.#updateCameraMatrix();
 
+        // create the texture matrix
+        const textureWorldMatrix = m4.lookAt(
+            [50, 50, 50],
+            [0, 0, 0],
+            [0, -1, 0]
+        );
+        const projWidth = 0.32;
+        const projHeight = 0.32;
+        m4.scale(textureWorldMatrix, projWidth, projHeight, 1, textureWorldMatrix);
+        const textureProjectionMatrix = m4.perspective(
+            this.degToRad(45),
+            projWidth / projHeight,
+            0.1,  // near
+            200)
+
         this.uniformsThatAreTheSameForAllObjects = {
-            u_lightWorldPos:         [-50, 30, 100],
+            u_projection:            this.projectionMatrix,
+            u_view:                  this.viewMatrix,
+            u_lightWorldPos:         [-100, 100, 100],
             u_viewInverse:           this.cameraMatrix,
             u_lightColor:            [1, 1, 1, 1],
+            u_textureMatrix:         m4.multiply(textureProjectionMatrix, m4.inverse(textureWorldMatrix))
         };
     
         this.uniformsThatAreComputedForEachObject = {
-            u_worldViewProjection:   m4.identity(),
             u_world:                 m4.identity(),
             u_worldInverseTranspose: m4.identity(),
         };
@@ -230,6 +262,23 @@ export class WebGLTWGL {
         this.#initTweakpane();
 
         if (this.oninit) this.oninit(this);
+    }
+
+    #updateTexture() {
+        // replace the placeholder texture
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.imageTexture);
+        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.image);
+        this.gl.generateMipmap(this.gl.TEXTURE_2D);
+    }
+
+    #createAndSetupTexture(gl) {
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        return texture;
     }
 
     #updateProjectionMatrix() {
@@ -246,10 +295,7 @@ export class WebGLTWGL {
         this.cameraMatrix = m4.translate(this.cameraMatrix, 0, 0, 50);
 
         // init the view matrix
-        this.viewMatrix = m4.inverse(this.cameraMatrix);
-
-        // update the view projection matrix
-        this.viewProjectionMatrix = m4.multiply(this.projectionMatrix, this.viewMatrix);
+        this.viewMatrix = m4.inverse(this.cameraMatrix, this.viewMatrix);
     }
 
     #updateModelMatrix() {
