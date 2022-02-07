@@ -40,7 +40,7 @@ void main() {
         projectedLightCoord.y <= 1.0;
     float projectedAmount = inRange ? 1.0 : 0.0;
     float projectedDepth = texture(u_projectedTexture, projectedLightCoord.xy).r;
-    float shadowLight = (!u_recieveShadow || currentDepth <= projectedDepth) ? 1.0 : 0.5;
+    float shadowLight = (!u_recieveShadow || currentDepth <= projectedDepth) ? 1.0 : 0.;
 
 
     vec4 diffuseColor = texture(u_diffuse, v_texCoord) * u_colorMult;
@@ -49,5 +49,5 @@ void main() {
     vec3 surfaceToView = normalize(v_surfaceToView);
     vec3 halfVector = normalize(surfaceToLight + surfaceToView);
     vec4 litR = lit(dot(a_normal, surfaceToLight), dot(a_normal, halfVector), u_shininess);
-    outColor = vec4((shadowLight * u_lightColor * (diffuseColor * litR.y + diffuseColor * u_ambient + u_specular * litR.z * u_specularFactor)).rgb, diffuseColor.a);
+    outColor = vec4((u_lightColor * (diffuseColor * litR.y * shadowLight + diffuseColor * u_ambient + u_specular * litR.z * u_specularFactor * shadowLight)).rgb, diffuseColor.a);
 }

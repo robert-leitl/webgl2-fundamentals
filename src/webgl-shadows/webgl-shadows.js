@@ -277,7 +277,7 @@ export class WebGLShadows {
 
         this.material1Uniforms = {
             u_colorMult:             chroma.hsv(0, 0, 1).gl(),
-            u_ambient:               [0.2, 0.2, 0.2, 1],
+            u_ambient:               [0.3, 0.3, 0.35, 1],
             u_diffuse:               texture,
             u_specular:              [1, 1, 1, 1],
             u_shininess:             50,
@@ -287,7 +287,7 @@ export class WebGLShadows {
 
         this.material2Uniforms = {
             u_colorMult:             chroma.hsv(200, 1, 1).gl(),
-            u_ambient:               [0.1, 0.1, 0.1, 1],
+            u_ambient:               [0.3, 0.3, 0.35, 1],
             u_diffuse:               texture,
             u_specular:              [1, 1, 1, 1],
             u_shininess:             5,
@@ -460,8 +460,8 @@ export class WebGLShadows {
             const objectYSlider = this.pane.addBlade({
                 view: 'slider',
                 label: 'sphere Y',
-                min: -15,
-                max: 8,
+                min: 0,
+                max: 20,
                 value: 0,
             });
 
