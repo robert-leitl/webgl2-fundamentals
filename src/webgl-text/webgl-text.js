@@ -3,6 +3,8 @@ import * as twgl from 'twgl.js';
 import { m4 } from '../math/m4';
 import fFragmentShaderSource from './shader/f-fragment.glsl';
 import fVertexShaderSource from './shader/f-vertex.glsl';
+import textFragmentShaderSource from './shader/text-fragment.glsl';
+import textVertexShaderSource from './shader/text-vertex.glsl';
 
 export class WebGLText {
     oninit;
@@ -56,6 +58,8 @@ export class WebGLText {
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
         this.gl.enable(this.gl.DEPTH_TEST);
         this.gl.enable(this.gl.CULL_FACE);
+        this.gl.disable(this.gl.BLEND);
+        this.gl.depthMask(true);
 
         // draw Fs
         this.gl.useProgram(this.fProgramInfo.program);
@@ -106,6 +110,33 @@ export class WebGLText {
         );
         overlayPosition = twgl.v3.add(overlayPosition, [this.gl.canvas.clientWidth * .5, this.gl.canvas.clientHeight * 0.5, 0]);
         this.overlayElm.style.transform = `translate(${overlayPosition[0]}px,${overlayPosition[1]}px)`;
+
+
+        // draw the text quad
+        this.gl.enable(this.gl.BLEND);
+        this.gl.blendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
+        this.gl.depthMask(true);    // disable depth writing
+
+        this.gl.useProgram(this.textProgramInfo.program);
+        this.gl.bindVertexArray(this.textVAO);
+        const targetFMatrix = twgl.m4.multiply(this.globalUniforms.u_viewMatrix, fWorldMatrices[9]);
+        const textPos = [targetFMatrix[12], targetFMatrix[13], targetFMatrix[14]];
+        const fromEye = twgl.v3.normalize(textPos);
+        const offsetFromEye = 150;
+        textPos[0] -= fromEye[0] * offsetFromEye;
+        textPos[1] -= fromEye[1] * offsetFromEye;
+        textPos[2] -= fromEye[2] * offsetFromEye;
+        // make the text stay the same size
+        const scale = twgl.v3.mulScalar(this.textScale, -textPos[2] / this.gl.canvas.height);
+        const textMatrix = twgl.m4.scale(twgl.m4.translation(textPos), scale);
+        twgl.m4.scale(textMatrix, [0.25, 0.25, 1], textMatrix);
+        const textUniforms = { 
+            u_worldMatrix: textMatrix,
+            u_viewMatrix: twgl.m4.identity(),
+            u_texture: this.textTexture 
+        };
+        twgl.setUniforms(this.textProgramInfo, {...this.globalUniforms, ...textUniforms});
+        twgl.drawBufferInfo(this.gl, this.textBufferInfo);
     }
 
     destroy() {
@@ -128,11 +159,26 @@ export class WebGLText {
 
         // setup programs
         this.fProgramInfo = twgl.createProgramInfo(this.gl, [fVertexShaderSource, fFragmentShaderSource]);
+        this.textProgramInfo = twgl.createProgramInfo(this.gl, [textVertexShaderSource, textFragmentShaderSource]);
 
-        // setup buffers
+        // setup f vertex array object and buffers
         this.fBufferInfo = twgl.primitives.create3DFBufferInfo(this.gl);
         this.fVAO = twgl.createVAOFromBufferInfo(this.gl, this.fProgramInfo, this.fBufferInfo);
         this.fOrigin = [-50, -75, -15];
+
+        this.textBufferInfo = twgl.primitives.createXYQuadBufferInfo(this.gl, 1);
+        this.textVAO = twgl.createVAOFromBufferInfo(this.gl, this.textProgramInfo, this.textBufferInfo);
+
+        // create the text texture
+        const textCanvas = this.#createCanvasText('HELLO TEXTURE!', 800, 130);
+        this.textTexture = this.gl.createTexture();
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.textTexture);
+        this.gl.pixelStorei(this.gl.UNPACK_FLIP_Y_WEBGL, true);
+        this.gl.pixelStorei(this.gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true); // canvas produces premultiplied alpha
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR_MIPMAP_LINEAR);
+        this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, textCanvas);
+        this.gl.generateMipmap(this.gl.TEXTURE_2D);
+        this.textScale = [textCanvas.width, textCanvas.height, 1];
 
         // init the global uniforms
         this.globalUniforms = {
@@ -150,6 +196,24 @@ export class WebGLText {
         this.#initTweakpane();
 
         if (this.oninit) this.oninit(this);
+    }
+
+    #createCanvasText(text, width, height) {
+        if (!this.textCanvas) {
+            this.textCanvas = document.createElement('canvas');
+            this.textCanvasContext = this.textCanvas.getContext('2d');
+        }
+
+        this.textCanvasContext.canvas.width  = width;
+        this.textCanvasContext.canvas.height = height;
+        this.textCanvasContext.font = "bold 85px sans-serif";
+        this.textCanvasContext.textAlign = "center";
+        this.textCanvasContext.textBaseline = "middle";
+        this.textCanvasContext.fillStyle = "white";
+        this.textCanvasContext.clearRect(0, 0, this.textCanvasContext.canvas.width, this.textCanvasContext.canvas.height);
+        this.textCanvasContext.fillText(text, width / 2, height / 2);
+
+        return this.textCanvas;
     }
 
     #createHTMLOverlay() {
