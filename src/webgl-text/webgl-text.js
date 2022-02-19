@@ -115,7 +115,7 @@ export class WebGLText {
         // draw the text quad
         this.gl.enable(this.gl.BLEND);
         this.gl.blendFunc(this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
-        this.gl.depthMask(true);    // disable depth writing
+        this.gl.depthMask(false);    // disable depth writing
 
         this.gl.useProgram(this.textProgramInfo.program);
         this.gl.bindVertexArray(this.textVAO);
