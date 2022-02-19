@@ -53,6 +53,8 @@ export class WebGLGPGPU {
         this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
         this.gl.disable(this.gl.DEPTH_TEST);
         this.gl.disable(this.gl.CULL_FACE);
+        this.gl.enable(this.gl.BLEND);
+        this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.DST_ALPHA);
 
         // compute the new positions
         this.gl.enable(this.gl.RASTERIZER_DISCARD);
@@ -85,7 +87,7 @@ export class WebGLGPGPU {
     }
 
     #init() {
-        this.gl = this.canvas.getContext('webgl2');
+        this.gl = this.canvas.getContext('webgl2', { antialias: true });
         if (!this.gl) {
             throw new Error('No WebGL 2 context!')
         }
@@ -108,7 +110,7 @@ export class WebGLGPGPU {
         };
 
         // init the positions and velocities
-        this.NUM_PARTICLES = 100;
+        this.NUM_PARTICLES = 10000;
         const positions = new Float32Array(Array(this.NUM_PARTICLES).fill(0).map(_ => Array(3).fill(0).map(_ => Math.random())).flat());
         const velocities = new Float32Array(Array(this.NUM_PARTICLES).fill(0).map(_ => Array(3).fill(0).map(_ => (Math.random() * 2 - 1) * 0.0001 )).flat());
 
@@ -252,7 +254,7 @@ export class WebGLGPGPU {
 
     #updateProjectionMatrix() {
         const aspect = this.gl.canvas.clientWidth / this.gl.canvas.clientHeight;
-        twgl.m4.perspective(Math.PI / 4, aspect, 1, 4000, this.drawUniforms.u_projectionMatrix);
+        twgl.m4.perspective(Math.PI / 4, aspect, 50, 150, this.drawUniforms.u_projectionMatrix);
     }
 
     #initTweakpane() {
@@ -267,6 +269,18 @@ export class WebGLGPGPU {
 
             cameraYSlider.on('change', e => {
                 this.camera.position[1] = e.value;
+                this.#updateCameraMatrix();
+            });
+            const cameraXSlider = this.pane.addBlade({
+                view: 'slider',
+                label: 'c.x',
+                min: -100,
+                max: 100,
+                value: this.camera.position[0],
+            });
+
+            cameraXSlider.on('change', e => {
+                this.camera.position[0] = e.value;
                 this.#updateCameraMatrix();
             });
         }

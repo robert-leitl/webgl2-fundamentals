@@ -9,5 +9,5 @@ out vec3 t_newPosition;
 
 void main() {
     t_newPosition = a_oldPosition + a_velocity * u_deltaTime;
-    t_newPosition = mod(t_newPosition, vec3(1.));
+    t_newPosition = mod(t_newPosition, vec3(1., 1., 1.));
 }
