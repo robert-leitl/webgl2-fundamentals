@@ -25,7 +25,7 @@ export class WebGLGPGPUDataTexture {
     sensorAngle = Math.PI / 4.;
     sensorSize = 25;
     velocity = .9;
-    steeringStrength = 0.78;
+    steeringStrength = 0.98;
 
     #time = 0;
     #deltaTime = 0;
@@ -167,6 +167,7 @@ export class WebGLGPGPUDataTexture {
     }
 
     #init() {
+        /** @type {WebGLRenderingContext} */
         this.gl = this.canvas.getContext('webgl2', { antialias: true });
         if (!this.gl) {
             throw new Error('No WebGL 2 context!')

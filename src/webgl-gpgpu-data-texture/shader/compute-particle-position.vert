@@ -70,6 +70,7 @@ void main() {
     vec2 centerDirection = normalize(centerPos);
     float damping = smoothstep(0.25, 1., length(centerPos) / min(resolution.x, resolution.y));
     float returnStrength = max(0., dot(centerDirection, direction)) * damping;
+    // find the return angle with the cross product
     angle += sign(centerDirection.x * direction.y - centerDirection.y * direction.x) * returnStrength;
     direction = vec2(cos(angle), sin(angle));
     
