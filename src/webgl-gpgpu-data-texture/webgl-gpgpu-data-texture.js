@@ -190,7 +190,7 @@ export class WebGLGPGPUDataTexture {
         // find the locations
         this.computeParticleLocations = {
             a_oldPosition: this.gl.getAttribLocation(this.computeParticleProgram, 'a_oldPosition'),
-            a_oldVelocity: this.gl.getAttribLocation(this.computeParticleProgram, 'a_oldAngle'),
+            a_oldAngle: this.gl.getAttribLocation(this.computeParticleProgram, 'a_oldAngle'),
             u_deltaTime: this.gl.getUniformLocation(this.computeParticleProgram, 'u_deltaTime'),
             u_resolution: this.gl.getUniformLocation(this.computeParticleProgram, 'u_resolution'),
             u_trailsTexture: this.gl.getUniformLocation(this.computeParticleProgram, 'u_trailsTexture'),
