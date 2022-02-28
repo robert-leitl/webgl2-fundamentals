@@ -27,7 +27,11 @@ export class WebGLInstancedDrawing {
 
     resize() {
         twgl.resizeCanvasToDisplaySize(this.gl.canvas);
-        this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
+        
+        // When you need to set the viewport to match the size of the canvas's
+        // drawingBuffer this will always be correct
+        this.gl.viewport(0, 0, this.gl.drawingBufferWidth, this.gl.drawingBufferHeight);
+        //this.gl.viewport(0, 0, this.gl.canvas.width, this.gl.canvas.height);
 
         this.#updateProjectionMatrix();
     }
@@ -81,7 +85,7 @@ export class WebGLInstancedDrawing {
 
     #init() {
         /** @type {WebGLRenderingContext} */
-        this.gl = this.canvas.getContext('webgl2', { antialias: true });
+        this.gl = this.canvas.getContext('webgl2', { antialias: true, alpha: false });
         if (!this.gl) {
             throw new Error('No WebGL 2 context!')
         }
